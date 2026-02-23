@@ -77,3 +77,5 @@ Fixture 클래스가 JdbcTemplate을 직접 받아서 삽입까지 하는 설계
 ### 프롬프트 17
 GiftAcceptanceTest에서 수량 관련 매직넘버(3, 7, 10, 100)를 제거하라. Fixture가 반환하는 Option 도메인 객체를 보관하고 option.getQuantity()를 활용하여 수량 관계를 명시적으로 표현하라.
 
+### 프롬프트 18
+리뷰 반영: "ID만 검증하면 충분한가?" — id가 일치하는지 확인하는 것만으로 테스트 성공이 완벽하게 보장되는 걸까? 카테고리 이름도 정상적으로 DB에 들어갔는지 확인은 필요 없을까? ID 존재 여부만이 아닌 핵심 필드(name, price 등)도 함께 검증해야 한다는 원칙을 TEST_STRATEGY.md와 SKILL.md에 반영하라.
