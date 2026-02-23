@@ -26,35 +26,75 @@
 
 ### 원칙
 
-1. **매 테스트마다 DB를 초기화한다.** `@Sql(scripts = "classpath:cleanup.sql")`로 모든 테이블을 TRUNCATE하여 테스트 간 격리를 보장한다.
-2. **테스트 데이터는 SQL 스크립트로 주입한다.** `@Sql` 어노테이션을 사용하여 테스트 실행 전에 필요한 데이터를 삽입한다.
-3. **각 테스트는 독립적으로 실행 가능해야 한다.** 테스트 순서에 의존하지 않는다.
+1. **매 테스트마다 DB를 초기화한다.** `DatabaseCleaner`를 `@BeforeEach`에서 실행하여 모든 테이블을 TRUNCATE하고 테스트 간 격리를 보장한다.
+2. **테스트 데이터는 Java 코드(Fixture Builder + JdbcTemplate)로 준비한다.** SQL 스크립트 대신 Java 코드로 테스트 데이터를 생성하여 가독성과 재사용성을 높인다.
+3. **데이터 저장에는 Repository가 아닌 JdbcTemplate을 사용한다.** Repository는 애플리케이션의 내부 구현이므로, 인프라 수준의 JdbcTemplate으로 데이터를 삽입한다.
+4. **각 테스트는 독립적으로 실행 가능해야 한다.** 테스트 순서에 의존하지 않는다.
 
-### 데이터 파일 구성
+### @Sql에서 Java Fixture로 전환한 이유
+
+리뷰 과정에서 `@Sql` 기반 데이터 준비 전략의 한계를 인식하고, Java Fixture Builder + JdbcTemplate 방식으로 전환했다.
+
+| 관점 | @Sql 방식 | Java Fixture 방식 |
+|---|---|---|
+| 매직 넘버 | SQL에 ID(1, 2)가 하드코딩됨 | 코드로 의미 부여 가능 (`savedMember.getId()`) |
+| 확장성 | 테스트마다 SQL 조합을 작성해야 함 | Fixture 재사용으로 조합 용이 |
+| 재사용성 | 파일 단위로만 재사용 가능 | 상태별 Fixture(비활성 유저, 활성 유저 등) 정의 및 재사용 가능 |
+| 가독성 | 테스트와 SQL 파일을 오가며 확인 필요 | 테스트 코드 안에서 데이터 의도 파악 가능 |
+
+### 테스트 데이터 계층 구성
+
+Fixture는 "어떤 데이터인가"만 표현하고, "어떻게 저장하는가"는 `TestDataInitializer`에 위임한다. Fixture는 도메인 객체를 반환하고, TestDataInitializer가 그 객체를 받아 JdbcTemplate으로 영속화한다.
+
+| 계층 | 책임 | 예시 |
+|---|---|---|
+| Fixture | 시나리오별 도메인 객체 생성 | `MemberFixture.일반회원()` → `Member` 반환 |
+| TestDataInitializer | 도메인 객체를 JdbcTemplate으로 영속화 | `initializer.saveMember(member)` → ID 반환 |
+| DatabaseCleaner | DB 초기화 | `cleaner.clear()` |
 
 ```
-src/test/resources/
-├── cleanup.sql              # 전체 테이블 초기화 (공통)
-├── product-test-data.sql    # 상품 테스트용 (카테고리 1건)
-└── gift-test-data.sql       # 선물 테스트용 (회원 2건, 카테고리 1건, 상품 1건, 옵션 1건)
+src/test/java/gift/
+├── fixture/
+│   ├── MemberFixture.java           # 회원 데이터 정의
+│   ├── CategoryFixture.java         # 카테고리 데이터 정의
+│   ├── ProductFixture.java          # 상품 데이터 정의
+│   └── OptionFixture.java           # 옵션 데이터 정의
+└── support/
+    ├── TestDataInitializer.java     # JdbcTemplate 기반 데이터 저장
+    └── DatabaseCleaner.java         # DB 초기화 유틸리티
 ```
 
-### cleanup.sql 전략
+### Fixture와 TestDataInitializer를 분리하는 이유
 
+Fixture가 JdbcTemplate을 직접 받아 삽입까지 담당하면, 프로젝트가 커질수록 값 정의의 변경과 영속화 로직의 변경이 항상 같은 클래스에서 동시에 일어나는 문제가 생긴다.
+
+**예: Member에 `grade`, `status` 컬럼이 추가되는 경우**
+
+결합된 방식에서는 Fixture 메서드 시그니처가 비대해지거나 오버로딩이 폭발한다.
+
+```java
+// 결합된 방식 — 파라미터가 계속 늘어남
+static Long insert(JdbcTemplate jt, String name, String email) { ... }
+static Long insert(JdbcTemplate jt, String name, String email, Grade grade) { ... }
+static Long insert(JdbcTemplate jt, String name, String email, Grade grade, Status status) { ... }
+```
+
+분리된 방식에서는 변경 지점이 격리된다.
+
+- **컬럼 추가 시:** `TestDataInitializer.saveMember()`의 params에 한 줄 추가. Fixture의 시나리오 메서드들은 그대로.
+- **시나리오 추가 시:** Fixture에만 메서드 추가. TestDataInitializer는 그대로.
+
+### DB 초기화 전략
+
+- `DatabaseCleaner`는 `@Component`로 등록하여 테스트에서 주입받아 사용한다.
 - H2 Database의 `SET REFERENTIAL_INTEGRITY FALSE/TRUE`를 활용하여 외래 키 제약 조건 무시 후 TRUNCATE한다.
 - 모든 테이블(wish, option, product, member, category)을 초기화한다.
 
-### 테스트 데이터 주입 전략
+### 테스트 데이터 준비 전략
 
-- **카테고리 테스트:** cleanup만 수행. 테스트 내에서 API를 통해 직접 생성한다.
-- **상품 테스트:** cleanup 후 카테고리 데이터를 SQL로 사전 삽입한다. (상품은 카테고리 ID가 필요하므로)
-- **선물 테스트:** cleanup 후 전체 의존 데이터(회원, 카테고리, 상품, 옵션)를 SQL로 사전 삽입한다. (회원/옵션 생성 API가 없으므로)
-
-### SQL 작성 시 주의사항
-
-- JPA 네이밍 전략에 의해 camelCase 필드가 snake_case 컬럼으로 변환된다. (예: `imageUrl` → `image_url`)
-- Entity 필드명이 아닌 실제 DB 컬럼명을 사용해야 한다.
-- H2 Database 호환 SQL만 사용한다.
+- **카테고리 테스트:** DB 초기화만 수행. 테스트 내에서 API를 통해 직접 생성한다.
+- **상품 테스트:** `CategoryFixture.기본카테고리()`로 도메인 객체를 생성하고 `initializer.saveCategory()`로 저장한 뒤, 반환된 ID로 상품 생성 API를 호출한다.
+- **선물 테스트:** `MemberFixture.일반회원()`, `OptionFixture.재고10개옵션()` 등으로 도메인 객체를 생성하고 TestDataInitializer로 저장한 뒤, API를 호출한다. 시나리오의 의도가 Fixture 메서드명에 담기므로 가독성이 높다.
 
 ---
 
@@ -121,3 +161,9 @@ src/test/resources/
 **결정:** 정상 시나리오와 예외 시나리오를 모두 테스트한다.
 
 **이유:** 선물하기의 핵심 비즈니스 규칙은 재고 관리이다. 재고 부족 시 안전한 실패(트랜잭션 롤백으로 재고 무변경)는 정상 동작만큼 중요한 검증 대상이다.
+
+### 의사결정 5: 테스트 데이터 준비를 @Sql에서 Java Fixture로 전환
+
+**결정:** `@Sql` 기반 SQL 스크립트 대신 Java Fixture Builder + JdbcTemplate 방식으로 테스트 데이터를 준비한다. 데이터 저장에는 Repository가 아닌 JdbcTemplate을 사용한다.
+
+**이유:** 리뷰를 통해 `@Sql` 방식의 한계를 인식했다. SQL에 ID가 하드코딩되어 매직 넘버가 발생하고, 테스트마다 SQL 조합을 새로 작성해야 하며, 테스트 코드와 SQL 파일을 오가며 읽어야 하는 불편이 있다. Java Fixture는 코드로 데이터 의도를 표현하고, 상태별 Fixture(비활성 유저 등)를 정의하여 재사용할 수 있어 프로젝트가 커질수록 유리하다. 또한 Repository는 애플리케이션의 내부 구현에 해당하므로, 인프라 수준의 JdbcTemplate을 사용하여 테스트와 내부 구현 간 결합을 방지한다.

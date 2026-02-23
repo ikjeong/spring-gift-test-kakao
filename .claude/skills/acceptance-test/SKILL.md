@@ -11,7 +11,7 @@ Spring Boot + RestAssured 기반 인수 테스트(Acceptance Test)를 작성하�
 
 1. **기존 소스코드 절대 수정 금지** — 테스트 코드와 테스트 리소스만 생성한다.
 2. **RestAssured given-when-then** — 모든 테스트는 given/when/then 구조로 작성하여 의도를 명시한다.
-3. **SQL 기반 데이터 관리** — `@Sql` 어노테이션으로 테스트 데이터 초기화 및 주입을 관리한다.
+3. **Java Fixture Builder + JdbcTemplate 기반 데이터 관리** — SQL 스크립트 대신 Java 코드로 테스트 데이터를 생성하고, JdbcTemplate을 통해 DB에 삽입한다. Repository는 애플리케이션 내부 구현이므로 사용하지 않는다. `DatabaseCleaner`로 DB를 초기화한다.
 
 ---
 
@@ -57,28 +57,92 @@ dependencies {
 }
 ```
 
-### 3단계: 테스트 SQL 작성
+### 3단계: Fixture, TestDataInitializer, DatabaseCleaner 작성
 
-테스트 데이터 관리를 위해 SQL 스크립트를 작성한다.
-SQL 파일은 `src/test/resources/` 하위에 배치한다.
+테스트 데이터 관리를 위해 세 계층을 작성한다. Fixture는 "어떤 데이터인가"만 정의하고(도메인 객체 반환), "어떻게 저장하는가"는 TestDataInitializer에 위임한다(JdbcTemplate 영속화). 이렇게 분리하면 컬럼 추가 시 TestDataInitializer만, 시나리오 추가 시 Fixture만 수정하면 된다.
 
-**cleanup.sql — DB 초기화:**
-```sql
--- 외래 키 제약 조건 때문에 삭제 순서가 중요하다.
--- 자식 테이블 → 부모 테이블 순서로 삭제한다.
--- Entity 관계를 분석하여 올바른 순서를 결정한다.
-SET REFERENTIAL_INTEGRITY FALSE;
-TRUNCATE TABLE [자식_테이블];
-TRUNCATE TABLE [부모_테이블];
-SET REFERENTIAL_INTEGRITY TRUE;
+**DatabaseCleaner — DB 초기화:**
+
+`@Component`로 등록하여 테스트에서 주입받아 사용한다. 모든 테이블을 TRUNCATE하여 테스트 간 격리를 보장한다.
+
+```java
+@Component
+public class DatabaseCleaner {
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    public void clear() {
+        jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY FALSE");
+        // Entity 관계를 분석하여 모든 테이블을 TRUNCATE한다.
+        jdbcTemplate.execute("TRUNCATE TABLE [테이블명]");
+        jdbcTemplate.execute("SET REFERENTIAL_INTEGRITY TRUE");
+    }
+}
 ```
 
-**[feature]-test-data.sql — 테스트 데이터 주입:**
-```sql
--- JPA의 Entity 필드명이 아닌, 실제 DB 컬럼명을 사용해야 한다.
--- @Column(name = "...") 어노테이션이 있으면 그 값을, 없으면 JPA 네이밍 전략(camelCase → snake_case)을 따른다.
--- 예: memberName 필드 → member_name 컬럼
-INSERT INTO member (id, name, email) VALUES (1, '테스트유저', 'test@example.com');
+**Fixture 클래스 — 시나리오별 도메인 객체 생성만 담당:**
+
+각 도메인별로 Fixture 클래스를 작성한다. DB 저장 로직 없이 도메인 객체만 반환한다. 메서드명으로 시나리오의 의도를 표현한다.
+
+```java
+public class MemberFixture {
+
+    public static Member 일반회원() {
+        return new Member("테스트유저", "test@example.com");
+    }
+
+    public static Member 발신회원() {
+        return new Member("보내는사람", "sender@test.com");
+    }
+
+    public static Member 수신회원() {
+        return new Member("받는사람", "receiver@test.com");
+    }
+}
+```
+
+**TestDataInitializer — 도메인 객체를 JdbcTemplate으로 영속화:**
+
+`@Component`로 등록하여 Fixture가 생성한 도메인 객체를 DB에 저장하고, 생성된 ID를 반환한다. Repository는 애플리케이션 내부 구현이므로 테스트에서 사용하지 않는다.
+
+```java
+@Component
+public class TestDataInitializer {
+
+    private final JdbcTemplate jdbcTemplate;
+
+    public TestDataInitializer(JdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+    }
+
+    public Long saveMember(Member member) {
+        SimpleJdbcInsert insert = new SimpleJdbcInsert(jdbcTemplate)
+                .withTableName("member")
+                .usingGeneratedKeyColumns("id");
+        Map<String, Object> params = Map.of(
+                "name", member.getName(),
+                "email", member.getEmail()
+        );
+        return insert.executeAndReturnKey(params).longValue();
+    }
+
+    public Long saveCategory(Category category) {
+        SimpleJdbcInsert insert = new SimpleJdbcInsert(jdbcTemplate)
+                .withTableName("category")
+                .usingGeneratedKeyColumns("id");
+        Map<String, Object> params = Map.of("name", category.getName());
+        return insert.executeAndReturnKey(params).longValue();
+    }
+
+    // 도메인별 save 메서드 추가
+}
+```
+
+```java
+// 테스트에서의 사용 — 시나리오의 의도가 메서드명에 담김
+Long senderId = initializer.saveMember(MemberFixture.발신회원());
+Long receiverId = initializer.saveMember(MemberFixture.수신회원());
 ```
 
 ### 4단계: 인수 테스트 작성
@@ -92,37 +156,49 @@ class GiftApiTest {
 	@LocalServerPort
 	int port;
 
+	@Autowired
+	DatabaseCleaner databaseCleaner;
+
+	@Autowired
+	TestDataInitializer initializer;
+
 	@BeforeEach
 	void setUp() {
 		RestAssured.port = port;
+		databaseCleaner.clear();
 	}
 
-	// 테스트마다 DB 초기화 + 테스트 데이터 삽입
-	@Sql(scripts = "classpath:cleanup.sql")
-	@Sql(scripts = "classpath:gift-test-data.sql")
 	@Test
 	void gift_생성_테스트() {
-		// 예시 JSON 바디
+		// given — Fixture(도메인 객체 생성) + TestDataInitializer(영속화)
+		Long senderId = initializer.saveMember(MemberFixture.발신회원());
+		Long receiverId = initializer.saveMember(MemberFixture.수신회원());
+		Long categoryId = initializer.saveCategory(CategoryFixture.기본카테고리());
+		Long productId = initializer.saveProduct(ProductFixture.기본상품(categoryId));
+		Long optionId = initializer.saveOption(OptionFixture.재고10개옵션(productId));
+
 		String body = """
 				{
-				  "name": "초콜릿",
-				  "price": 10000
+				  "optionId": %d,
+				  "quantity": 3,
+				  "receiverId": %d,
+				  "message": "생일 축하해!"
 				}
-				""";
+				""".formatted(optionId, receiverId);
 
+		// when
 		ExtractableResponse<Response> res =
 				RestAssured.given().log().all()
 						.contentType(ContentType.JSON)
-						.header("member-id", "1")
+						.header("Member-Id", senderId)
 						.body(body)
 						.when()
 						.post("/api/gifts")
 						.then().log().all()
-						.statusCode(201)   // 필요에 따라 200/201 등으로 수정
+						.statusCode(HttpStatus.OK.value())
 						.extract();
 
-		// 필요하면 후속 검증 예시
-		// String id = res.jsonPath().getString("id");
+		// then — 매직 넘버 없이 ID로 검증
 	}
 }
 ```
@@ -134,12 +210,14 @@ class GiftApiTest {
 데이터를 변경하는 API를 테스트할 때, 변경 후 조회 API를 호출하여 상태가 실제로 변경되었는지 증명한다.
 
 ```java
-@Sql(scripts = {"/cleanup.sql", "/[feature]-test-data.sql"})
 @Test
 void 상태_변경_후_조회로_증명() {
+    // given — Fixture(도메인 객체 생성) + TestDataInitializer(영속화)
+    Long resourceId = initializer.saveResource(ResourceFixture.변경전상태());
+
     // given — 변경 전 상태 확인
     ExtractableResponse<Response> before = RestAssured.given().log().all()
-            .when().get("/api/[resource]/1")
+            .when().get("/api/[resource]/" + resourceId)
             .then().log().all().extract();
     assertThat(before.jsonPath().getString("status")).isEqualTo("변경_전_상태");
 
@@ -147,13 +225,13 @@ void 상태_변경_후_조회로_증명() {
     RestAssured.given().log().all()
             .contentType(ContentType.JSON)
             .body(Map.of("status", "변경_후_상태"))
-            .when().put("/api/[resource]/1")
+            .when().put("/api/[resource]/" + resourceId)
             .then().log().all()
             .statusCode(HttpStatus.OK.value());
 
     // then — 변경 후 상태 확인
     ExtractableResponse<Response> after = RestAssured.given().log().all()
-            .when().get("/api/[resource]/1")
+            .when().get("/api/[resource]/" + resourceId)
             .then().log().all().extract();
     assertThat(after.jsonPath().getString("status")).isEqualTo("변경_후_상태");
 }
@@ -180,14 +258,16 @@ void 상태_변경_후_조회로_증명() {
 ## 파일 배치 규칙
 
 ```
-src/test/
-├── java/[패키지]/
-│   ├── [Feature]AcceptanceTest.java     # 인수 테스트 클래스
-│   └── ...
-└── resources/
-    ├── cleanup.sql                       # DB 초기화 (공통)
-    ├── [feature]-test-data.sql           # 기능별 테스트 데이터
-    └── ...
+src/test/java/[패키지]/
+├── [Feature]AcceptanceTest.java     # 인수 테스트 클래스
+├── fixture/
+│   ├── MemberFixture.java           # 회원 데이터 정의
+│   ├── CategoryFixture.java         # 카테고리 데이터 정의
+│   ├── ProductFixture.java          # 상품 데이터 정의
+│   └── OptionFixture.java           # 옵션 데이터 정의
+└── support/
+    ├── TestDataInitializer.java     # JdbcTemplate 기반 데이터 저장
+    └── DatabaseCleaner.java         # DB 초기화 유틸리티
 ```
 
 ## 검증 전략
@@ -252,11 +332,12 @@ DB 직접 조회는 다음 경우에만 사용한다.
 - **application.yml 수정 금지** — 테스트 전용 설정이 필요하면 `src/test/resources/application.yml`을 별도로 생성한다.
 
 ### 반드시 할 것
-- **모든 테스트는 독립적으로 실행 가능해야 한다** — `@Sql`로 매 테스트마다 데이터를 초기화하므로 테스트 순서에 의존하지 않는다.
+- **모든 테스트는 독립적으로 실행 가능해야 한다** — `@BeforeEach`에서 `DatabaseCleaner`로 매 테스트마다 데이터를 초기화하므로 테스트 순서에 의존하지 않는다.
+- **Fixture는 도메인 객체 생성만, TestDataInitializer는 영속화만 담당한다** — Fixture에 JdbcTemplate을 전달하지 않는다. 컬럼 추가 시 TestDataInitializer만, 시나리오 추가 시 Fixture만 수정하면 된다.
+- **Fixture 메서드명으로 시나리오의 의도를 표현한다** — `create("보내는사람", ...)` 대신 `발신회원()`, `수신회원()` 같이 데이터의 역할을 메서드명에 담는다.
+- **TestDataInitializer가 반환하는 ID를 코드로 참조한다** — `initializer.saveXxx()`가 반환하는 ID를 사용하여 하드코딩된 ID(1, 2 등)를 제거한다.
 - **RestAssured의 log().all()을 given과 then 양쪽에 붙인다** — 요청과 응답 로그를 모두 출력하여 디버깅을 용이하게 한다.
 - **HTTP 상태 코드는 HttpStatus enum을 사용한다** — 매직 넘버(200, 400) 대신 `HttpStatus.OK.value()`, `HttpStatus.BAD_REQUEST.value()`를 사용한다.
-- **SQL 스크립트 작성 시 Entity가 아닌 실제 DB 컬럼명을 사용한다** — JPA 네이밍 전략에 의해 camelCase가 snake_case로 변환될 수 있다.
-- **H2 Database 호환 SQL을 작성한다** — MySQL이나 PostgreSQL 전용 문법을 사용하지 않는다.
 
 ## 테스트 실행 확인
 
@@ -268,6 +349,6 @@ DB 직접 조회는 다음 경우에만 사용한다.
 ```
 
 실패 시 로그를 확인하고:
-1. SQL 스크립트의 컬럼명이 실제 DB 스키마와 일치하는지 확인
+1. TestDataInitializer의 INSERT 컬럼명이 실제 DB 스키마(JPA 네이밍 전략: camelCase → snake_case)와 일치하는지 확인
 2. 요청 본문의 필드명이 DTO와 일치하는지 확인
 3. API 경로가 Controller의 매핑과 일치하는지 확인

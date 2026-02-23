@@ -81,9 +81,9 @@ Claude Code의 Skill 기능을 활용하여 인수 테스트 작성 패턴을 �
 
 | 항목 | 내용 |
 |---|---|
-| 핵심 원칙 | 기존 소스코드 수정 금지, RestAssured given-when-then 패턴, SQL 기반 데이터 관리 |
-| 작업 절차 | 프로젝트 분석 → 의존성 확인 → SQL 작성 → 테스트 작성 → 실행 확인 (5단계) |
-| 테스트 구조 | `@SpringBootTest(RANDOM_PORT)` + `@Sql` + RestAssured |
+| 핵심 원칙 | 기존 소스코드 수정 금지, RestAssured given-when-then 패턴, Java Fixture Builder + JdbcTemplate 기반 데이터 관리 |
+| 작업 절차 | 프로젝트 분석 → 의존성 확인 → Fixture/TestDataInitializer/DatabaseCleaner 작성 → 테스트 작성 → 실행 확인 (5단계) |
+| 테스트 구조 | `@SpringBootTest(RANDOM_PORT)` + `DatabaseCleaner` + `Fixture` + `TestDataInitializer` + RestAssured |
 | 명명 규칙 | `[상황]_[행동]하면_[결과]한다` (한글 메서드명) |
 | 검증 전략 | HTTP 응답 → 조회 API → DB 직접 조회 (우선순위) |
 | 주의사항 | src/main 수정 금지, 테스트용 API 추가 금지, 독립 실행 가능 |
@@ -97,3 +97,9 @@ Skill은 한 번에 완성된 것이 아니라, 테스트 작성 과정에서 �
 **2차 개선 (검증 전략 추가):** AI가 조회 API가 없는 상황에서 간접적인 시나리오로 우회 테스트를 작성하는 문제 발생.
 - 예: "재고가 줄어든다"를 "재고가 없을 때 선물하면 예외 발생"으로 간접 검증
 - 이를 해결하기 위해 검증 전략 섹션을 추가하여, DB 직접 조회(JdbcTemplate)를 보조 수단으로 허용하는 가이드를 명시
+
+**3차 개선 (데이터 전략 전환):** 리뷰를 통해 `@Sql` 기반 데이터 준비 전략의 한계를 인식.
+- SQL에 ID 하드코딩(매직 넘버), 테스트마다 SQL 조합 필요, 테스트-SQL 파일 간 컨텍스트 스위칭 비용
+- Java Fixture Builder + JdbcTemplate 방식으로 전환하여 매직 넘버 제거, 상태별 Fixture 재사용, 테스트 코드 내 가독성 확보
+- Repository 대신 JdbcTemplate을 사용하는 이유: Repository는 애플리케이션 내부 구현이므로 테스트 데이터 준비에 사용하지 않음
+- Fixture(데이터 정의)와 TestDataInitializer(영속화)의 책임을 분리하여, 한쪽의 변경이 다른 쪽에 영향을 주지 않도록 설계
