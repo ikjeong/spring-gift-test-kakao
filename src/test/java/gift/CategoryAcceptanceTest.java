@@ -1,15 +1,16 @@
 package gift;
 
+import gift.support.DatabaseCleaner;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.response.ExtractableResponse;
 import io.restassured.response.Response;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatus;
-import org.springframework.test.context.jdbc.Sql;
 
 import java.util.List;
 
@@ -21,12 +22,15 @@ class CategoryAcceptanceTest {
     @LocalServerPort
     int port;
 
+    @Autowired
+    DatabaseCleaner databaseCleaner;
+
     @BeforeEach
     void setUp() {
         RestAssured.port = port;
+        databaseCleaner.clear();
     }
 
-    @Sql(scripts = "classpath:cleanup.sql")
     @Test
     void 카테고리를_생성하면_목록_조회_시_조회된다() {
         // given

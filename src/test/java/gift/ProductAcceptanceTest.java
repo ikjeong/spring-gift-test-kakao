@@ -1,15 +1,18 @@
 package gift;
 
+import gift.fixture.CategoryFixture;
+import gift.support.DatabaseCleaner;
+import gift.support.TestDataInitializer;
 import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.response.ExtractableResponse;
 import io.restassured.response.Response;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpStatus;
-import org.springframework.test.context.jdbc.Sql;
 
 import java.util.List;
 
@@ -21,28 +24,31 @@ class ProductAcceptanceTest {
     @LocalServerPort
     int port;
 
+    @Autowired
+    DatabaseCleaner databaseCleaner;
+
+    @Autowired
+    TestDataInitializer initializer;
+
     @BeforeEach
     void setUp() {
         RestAssured.port = port;
+        databaseCleaner.clear();
     }
 
-    @Sql(scripts = "classpath:cleanup.sql")
-    @Sql(scripts = "classpath:product-test-data.sql")
     @Test
     void 상품을_생성하면_목록_조회_시_조회된다() {
-        // given
-        String productName = "아이스 아메리카노";
-        int productPrice = 4500;
-        String imageUrl = "https://example.com/image.png";
-        Long categoryId = 1L;
+        // given — Fixture로 카테고리 데이터 준비
+        Long categoryId = initializer.saveCategory(CategoryFixture.기본카테고리());
+
         String body = """
                 {
-                    "name": "%s",
-                    "price": %d,
-                    "imageUrl": "%s",
+                    "name": "아이스 아메리카노",
+                    "price": 4500,
+                    "imageUrl": "https://example.com/image.png",
                     "categoryId": %d
                 }
-                """.formatted(productName, productPrice, imageUrl, categoryId);
+                """.formatted(categoryId);
 
         // when — 상품 생성
         ExtractableResponse<Response> createResponse = RestAssured.given().log().all()
@@ -68,7 +74,6 @@ class ProductAcceptanceTest {
         assertThat(ids).containsExactly(createdId);
     }
 
-    @Sql(scripts = "classpath:cleanup.sql")
     @Test
     void 존재하지_않는_카테고리로_상품을_생성하면_실패한다() {
         // given
