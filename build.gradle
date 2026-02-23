@@ -22,7 +22,9 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	runtimeOnly 'com.h2database:h2'
+	runtimeOnly 'org.postgresql:postgresql'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+	testImplementation 'org.springframework.boot:spring-boot-docker-compose'
 	testImplementation 'io.rest-assured:rest-assured:5.5.1'
 	testImplementation 'io.cucumber:cucumber-java:7.21.1'
 	testImplementation 'io.cucumber:cucumber-spring:7.21.1'
@@ -32,4 +34,12 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+tasks.register('cucumberTest', Test) {
+	description = 'Runs Cucumber acceptance tests with PostgreSQL'
+	group = 'verification'
+	useJUnitPlatform()
+	include '**/RunCucumberTest.class'
+	systemProperty 'spring.profiles.active', 'test'
 }

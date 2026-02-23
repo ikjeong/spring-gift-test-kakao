@@ -94,3 +94,9 @@ Gherkin 작성 원칙:
 
 ### 프롬프트 21
 기존 RestAssured 기반 인수테스트를 제거하라. 불필요한 fixture도 함께 제거하라.
+
+### 프롬프트 22
+현재 H2 인메모리 DB를 사용하는 테스트 환경을 PostgreSQL + Docker Compose로 전환하라. Spring Boot 3.5.8의 `spring-boot-docker-compose` 모듈을 활용하여 테스트 시 Docker Compose를 자동 시작/종료하고, datasource를 자동 구성한다. `test` 프로파일에서 PostgreSQL을, `default` 프로파일에서 H2를 유지하는 전략을 사용한다.
+
+### 프롬프트 23
+각 변경사항을 매우 구체적으로 설명하라. 왜 그렇게 했는지, 각 설정값들은 무엇인지 매우 구체적으로 작성해야 한다. 나의 공부 문서를 CUCUMBER.md처럼, DOCKER_COMPOSE.md에 작성하여 보고서를 완성해라.
