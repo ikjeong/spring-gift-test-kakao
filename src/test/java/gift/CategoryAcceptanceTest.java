@@ -53,7 +53,7 @@ class CategoryAcceptanceTest {
 
         Long createdId = createResponse.jsonPath().getLong("id");
 
-        // then — 목록 조회로 생성 확인
+        // then — 목록 조회로 생성 확인 (ID + 핵심 필드)
         ExtractableResponse<Response> response = RestAssured.given().log().all()
                 .when()
                 .get("/api/categories")
@@ -63,5 +63,8 @@ class CategoryAcceptanceTest {
 
         List<Long> ids = response.jsonPath().getList("id", Long.class);
         assertThat(ids).containsExactly(createdId);
+
+        List<String> names = response.jsonPath().getList("name", String.class);
+        assertThat(names).containsExactly(categoryName);
     }
 }

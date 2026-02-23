@@ -41,14 +41,17 @@ class ProductAcceptanceTest {
         // given — Fixture로 카테고리 데이터 준비
         Long categoryId = initializer.saveCategory(CategoryFixture.기본카테고리());
 
+        String productName = "아이스 아메리카노";
+        int productPrice = 4500;
+        String productImageUrl = "https://example.com/image.png";
         String body = """
                 {
-                    "name": "아이스 아메리카노",
-                    "price": 4500,
-                    "imageUrl": "https://example.com/image.png",
+                    "name": "%s",
+                    "price": %d,
+                    "imageUrl": "%s",
                     "categoryId": %d
                 }
-                """.formatted(categoryId);
+                """.formatted(productName, productPrice, productImageUrl, categoryId);
 
         // when — 상품 생성
         ExtractableResponse<Response> createResponse = RestAssured.given().log().all()
@@ -62,7 +65,7 @@ class ProductAcceptanceTest {
 
         Long createdId = createResponse.jsonPath().getLong("id");
 
-        // then — 목록 조회로 생성 확인
+        // then — 목록 조회로 생성 확인 (ID + 핵심 필드)
         ExtractableResponse<Response> listResponse = RestAssured.given().log().all()
                 .when()
                 .get("/api/products")
@@ -72,6 +75,18 @@ class ProductAcceptanceTest {
 
         List<Long> ids = listResponse.jsonPath().getList("id", Long.class);
         assertThat(ids).containsExactly(createdId);
+
+        List<String> names = listResponse.jsonPath().getList("name", String.class);
+        assertThat(names).containsExactly(productName);
+
+        List<Integer> prices = listResponse.jsonPath().getList("price", Integer.class);
+        assertThat(prices).containsExactly(productPrice);
+
+        List<String> imageUrls = listResponse.jsonPath().getList("imageUrl", String.class);
+        assertThat(imageUrls).containsExactly(productImageUrl);
+
+        List<Long> categoryIds = listResponse.jsonPath().getList("category.id", Long.class);
+        assertThat(categoryIds).containsExactly(categoryId);
     }
 
     @Test
