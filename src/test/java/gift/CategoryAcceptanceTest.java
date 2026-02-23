@@ -26,18 +26,21 @@ class CategoryAcceptanceTest {
         RestAssured.port = port;
     }
 
-    // NOTE: CreateCategoryRequest에 setter가 없고 @RequestBody 어노테이션이 누락되어
-    // @ModelAttribute 바인딩 시 name 필드가 null로 저장됩니다.
     @Sql(scripts = "classpath:cleanup.sql")
     @Test
     void 카테고리를_생성하면_목록_조회_시_조회된다() {
         // given
         String categoryName = "교환권";
+        String body = """
+                {
+                    "name": "%s"
+                }
+                """.formatted(categoryName);
 
         // when — 카테고리 생성
         ExtractableResponse<Response> createResponse = RestAssured.given().log().all()
-                .contentType(ContentType.URLENC)
-                .formParam("name", categoryName)
+                .contentType(ContentType.JSON)
+                .body(body)
                 .when()
                 .post("/api/categories")
                 .then().log().all()

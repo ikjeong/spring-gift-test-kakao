@@ -26,11 +26,6 @@ class ProductAcceptanceTest {
         RestAssured.port = port;
     }
 
-    // NOTE: CreateProductRequest에 setter가 없고 @RequestBody 어노테이션이 누락되어
-    // @ModelAttribute 바인딩 시 categoryId 필드가 null이 됩니다.
-    // categoryRepository.findById(null)에서 예외가 발생하여 상품 생성 API가 500을 반환합니다.
-    // CategoryAcceptanceTest와 동일한 원인이지만, Category는 name이 null이어도 저장 가능한 반면
-    // Product는 categoryId가 null이면 조회 자체가 실패합니다.
     @Sql(scripts = "classpath:cleanup.sql")
     @Sql(scripts = "classpath:product-test-data.sql")
     @Test
@@ -40,20 +35,28 @@ class ProductAcceptanceTest {
         int productPrice = 4500;
         String imageUrl = "https://example.com/image.png";
         Long categoryId = 1L;
+        String body = """
+                {
+                    "name": "%s",
+                    "price": %d,
+                    "imageUrl": "%s",
+                    "categoryId": %d
+                }
+                """.formatted(productName, productPrice, imageUrl, categoryId);
 
         // when — 상품 생성
-        RestAssured.given().log().all()
-                .contentType(ContentType.URLENC)
-                .formParam("name", productName)
-                .formParam("price", productPrice)
-                .formParam("imageUrl", imageUrl)
-                .formParam("categoryId", categoryId)
+        ExtractableResponse<Response> createResponse = RestAssured.given().log().all()
+                .contentType(ContentType.JSON)
+                .body(body)
                 .when()
                 .post("/api/products")
                 .then().log().all()
-                .statusCode(HttpStatus.INTERNAL_SERVER_ERROR.value());
+                .statusCode(HttpStatus.OK.value())
+                .extract();
 
-        // then — 생성 실패로 인해 목록이 비어 있음을 확인
+        Long createdId = createResponse.jsonPath().getLong("id");
+
+        // then — 목록 조회로 생성 확인
         ExtractableResponse<Response> listResponse = RestAssured.given().log().all()
                 .when()
                 .get("/api/products")
@@ -62,7 +65,7 @@ class ProductAcceptanceTest {
                 .extract();
 
         List<Long> ids = listResponse.jsonPath().getList("id", Long.class);
-        assertThat(ids).isEmpty();
+        assertThat(ids).containsExactly(createdId);
     }
 
     @Sql(scripts = "classpath:cleanup.sql")
@@ -70,14 +73,19 @@ class ProductAcceptanceTest {
     void 존재하지_않는_카테고리로_상품을_생성하면_실패한다() {
         // given
         Long nonExistentCategoryId = 999L;
+        String body = """
+                {
+                    "name": "아이스 아메리카노",
+                    "price": 4500,
+                    "imageUrl": "https://example.com/image.png",
+                    "categoryId": %d
+                }
+                """.formatted(nonExistentCategoryId);
 
         // when & then
         RestAssured.given().log().all()
-                .contentType(ContentType.URLENC)
-                .formParam("name", "아이스 아메리카노")
-                .formParam("price", 4500)
-                .formParam("imageUrl", "https://example.com/image.png")
-                .formParam("categoryId", nonExistentCategoryId)
+                .contentType(ContentType.JSON)
+                .body(body)
                 .when()
                 .post("/api/products")
                 .then().log().all()

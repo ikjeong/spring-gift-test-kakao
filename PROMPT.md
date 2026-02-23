@@ -37,3 +37,8 @@ formParam 안쓰고 지금 구조에서 API를 사용하는 방법이 전혀 없
 
 ### 프롬프트 10
 레거시 코드 인수 테스트 전략을 정리하여 TEST_STRATEGY.md(테스트 전략 문서)와 PROMPT_STRATEGY.md(프롬프트 및 AI 활용 방법 문서)를 작성하라. 프로젝트 분석부터 시나리오 도출, 테스트 작성까지의 전 과정을 문서화한다.
+
+### 프롬프트 11
+84ddc1f6dee62931f39e8d4af42dff6d19c19982
+
+여기서 @RequestBody 이슈를 해결했다. Category, Product 테스트에 대해 수정하고 테스트를 통과시켜라.  
