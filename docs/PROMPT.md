@@ -82,3 +82,12 @@ GiftAcceptanceTest에서 수량 관련 매직넘버(3, 7, 10, 100)를 제거하�
 
 ## 프롬프트 19
 실제 테스트에 반영하라.
+
+### 프롬프트 20
+기존 RestAssured 기반 인수 테스트(7개 시나리오)를 Cucumber BDD 형식으로 전환하라. 한글 Gherkin으로 .feature 파일을 작성하여 비개발자도 시나리오를 읽을 수 있는 테스트 체계를 구축한다. 기존 Fixture, DatabaseCleaner, TestDataInitializer는 재사용한다.
+
+Gherkin 작성 원칙:
+- Feature/Scenario/Given/When/Then 키워드는 영어로 작성
+- Step 텍스트는 도메인 언어(한글)로 표현 — 기술 용어(HTTP, JSON, API) 대신 비즈니스 용어 사용
+- 구현이 바뀌어도 Gherkin은 유지되어야 함
+- 적절한 추상화 수준 (너무 구체적이지도, 너무 일반적이지도 않게)
