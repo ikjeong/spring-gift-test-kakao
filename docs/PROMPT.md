@@ -112,3 +112,31 @@ compose 파일을 프로파일별로 분리하라. `compose.yaml`(개발, named 
 
 ### 프롬프트 27
 `test`와 `cucumberTest` 태스크의 역할을 분리하라. `test` 태스크는 Cucumber를 제외한 모든 테스트, `cucumberTest`는 Cucumber 인수 테스트 전용으로 분리한다. 두 태스크 모두 `test` 프로파일을 사용하되, 차이는 프로파일이 아니라 어떤 테스트를 실행하느냐이다. Docker 컨테이너는 Spring 컨텍스트가 실제로 로드될 때만 시작된다.
+
+### 프롬프트 28
+Spring Boot 앱 자체도 Docker 컨테이너로 실행하여, 프로덕션과 동일한 환경에서 End-to-End 테스트를 수행하라. Multi-stage Dockerfile로 이미지를 빌드하고, compose-docker.yaml로 App + DB를 함께 실행한다. Cucumber 테스트는 임베디드 서버 대신 Docker 컨테이너(localhost:28080)로 요청을 보내도록 변경한다. `dockerBuild`, `dockerUp`, `dockerDown` Gradle 태스크를 추가하여 Docker 라이프사이클을 관리한다.
+
+### 프롬프트 29
+`docker` 프로파일을 제거하고, `docker-test`를 `e2e`로 개명하여 4개 프로파일 체계를 3개로 단순화하라. `docker` 프로파일의 `create-drop` 설정은 `compose-docker.yaml`의 환경변수(`SPRING_JPA_HIBERNATE_DDL_AUTO`)로 대체한다. `docker.compose.enabled=false`는 `spring-boot-docker-compose`가 `developmentOnly`로 선언되어 bootJar에 포함되지 않으므로 불필요하다. 앱 컨테이너는 `default` + 환경변수 오버라이드로 동작한다.
+
+### 프롬프트 30
+다음 세 가지 주제를 분석하고, 그 결과를 기존 문서에 반영하라:
+1. Application 컨테이너화 테스트의 의미 — 컨테이너화 테스트의 대안(Testcontainers, 임베디드 모드)과 비교하여 현재 Docker Compose + Gradle Exec 방식의 적합성을 평가하라.
+2. Test code에 적용되는 프로파일 — step2 전환 후 문서에 반영되지 않은 프로파일 오류(`test` → `e2e`, `RANDOM_PORT` → `NONE` 등)를 수정하고, 프로파일 활성화 방식의 대안(@ActiveProfiles vs systemProperty)을 분석하라.
+3. Test code에 Spring이 필요한 이유 — `@SpringBootTest(NONE)`에서 사용하는 4개 빈(JdbcTemplate, DatabaseCleaner, TestDataInitializer, ScenarioContext)을 명시하고, Spring 없이 순수 JDBC로 대체하는 방안의 장단점을 분석하라.
+분석 결과 코드 변경은 없으며, 각 구성요소의 대안(pros/cons)을 문서에 추가한다.
+
+### 프롬프트 31
+`compose-test.yaml`과 `application-test.properties`를 제거하고, 3개 프로파일(`default`, `test`, `e2e`)을 2개 프로파일(`default`, `e2e`)로 축소하라. `test` 태스크는 현재 0개의 테스트를 실행하며, 향후 추가될 단위 테스트도 Spring 컨텍스트를 로드하지 않으므로 Docker Compose가 불필요하다. `build.gradle`의 `test` 태스크에서 `systemProperty 'spring.profiles.active', 'test'`를 제거하고, 관련 문서를 2프로파일 체계로 재정리한다.
+
+### 프롬프트 32
+`compose.yaml`(DB만)과 `compose-docker.yaml`(App+DB)을 하나의 `compose.yaml`(App+DB, 익명 볼륨)으로 통합하라. `spring-boot-docker-compose` 의존성을 제거하고, 개발 서버도 `dockerUp`/`dockerDown`으로 실행하도록 변경한다. App 포트를 28080에서 8080으로 변경하고, DDL을 `create-drop`에서 `update`로 통일한다.
+
+### 프롬프트 33
+7개 문서(~1570줄) + SKILL.md(361줄)를 통합·간소화하라. DOCKER_COMPOSE.md + APP_CONTAINERIZATION.md → DOCKER.md, TEST_STRATEGY.md + CUCUMBER.md → TEST.md로 통합하고, SKILL.md를 현재 설정(PostgreSQL, Cucumber, Docker)에 맞게 전면 재작성한다. PROMPT_STRATEGY.md는 핵심 워크플로우만 유지하여 축소하고, REPORT.md는 TEST.md에 흡수하여 삭제한다. 각 설정에 대한 설명·대안·장단점·선택 근거를 간결한 표 형식으로 정리한다.
+
+### 프롬프트 34
+DOCKER.md의 컨테이너 관리 방식 비교에서, Testcontainers의 단점과 선택 근거가 모호하다. Testcontainers가 더 나은 선택이라면 더 낫다고 표현하고, 향후 변경할만한 포인트로 제시하라.
+
+### 프롬프트 35
+프로파일 활성화 방식을 `systemProperty`에서 `@ActiveProfiles`로 변경하라. Cucumber 테스트는 항상 `e2e` 프로파일을 사용하므로 런타임 유연성이 불필요하다. 코드와 문서 모두 반영한다.
