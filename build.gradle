@@ -18,13 +18,12 @@ repositories {
 }
 
 dependencies {
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	runtimeOnly 'org.postgresql:postgresql'
-	developmentOnly 'org.springframework.boot:spring-boot-docker-compose'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
-	testImplementation 'org.springframework.boot:spring-boot-docker-compose'
 	testImplementation 'io.rest-assured:rest-assured:5.5.1'
 	testImplementation 'io.cucumber:cucumber-java:7.21.1'
 	testImplementation 'io.cucumber:cucumber-spring:7.21.1'
@@ -37,7 +36,6 @@ tasks.named('test') {
 		excludeEngines 'cucumber'
 	}
 	exclude '**/cucumber/**'
-	systemProperty 'spring.profiles.active', 'test'
 }
 
 tasks.register('cucumberTest', Test) {
@@ -45,5 +43,27 @@ tasks.register('cucumberTest', Test) {
 	group = 'verification'
 	useJUnitPlatform()
 	include '**/RunCucumberTest.class'
-	systemProperty 'spring.profiles.active', 'test'
+	systemProperty 'spring.profiles.active', 'e2e'
+	testLogging {
+		events 'passed', 'skipped', 'failed'
+		showStandardStreams = true
+	}
+}
+
+tasks.register('dockerBuild', Exec) {
+	group = 'docker'
+	description = 'Builds the Docker image for the application'
+	commandLine 'docker', 'build', '-t', 'gift-app', '.'
+}
+
+tasks.register('dockerUp', Exec) {
+	group = 'docker'
+	description = 'Starts the application and database containers'
+	commandLine 'docker-compose', 'up', '-d', '--build', '--wait'
+}
+
+tasks.register('dockerDown', Exec) {
+	group = 'docker'
+	description = 'Stops and removes the application and database containers'
+	commandLine 'docker-compose', 'down', '-v'
 }
