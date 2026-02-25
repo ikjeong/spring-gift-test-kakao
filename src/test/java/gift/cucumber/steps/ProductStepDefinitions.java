@@ -17,16 +17,16 @@ public class ProductStepDefinitions {
     @Autowired
     private ScenarioContext context;
 
-    @When("{string} 상품을 {int}원에 등록한다")
-    public void 상품을_등록한다(String name, int price) {
+    @When("{string} 상품을 {int}원, 이미지 {string}으로 해당 카테고리에 등록한다")
+    public void 상품을_등록한다(String name, int price, String imageUrl) {
         String body = """
                 {
                     "name": "%s",
                     "price": %d,
-                    "imageUrl": "https://example.com/image.png",
+                    "imageUrl": "%s",
                     "categoryId": %d
                 }
-                """.formatted(name, price, context.getCategoryId());
+                """.formatted(name, price, imageUrl, context.getCategoryId());
 
         var response = RestAssured.given().log().all()
                 .contentType(ContentType.JSON)
@@ -74,8 +74,8 @@ public class ProductStepDefinitions {
         assertThat(context.getStatusCode()).isEqualTo(500);
     }
 
-    @Then("상품 목록에 {string}이 {int}원으로 포함되어 있다")
-    public void 상품_목록에_포함되어_있다(String name, int price) {
+    @Then("상품 목록에 {string}이 {int}원, 이미지 {string}으로 해당 카테고리에 포함되어 있다")
+    public void 상품_목록에_포함되어_있다(String name, int price, String imageUrl) {
         var response = RestAssured.given().log().all()
                 .when()
                 .get("/api/products")
@@ -92,7 +92,7 @@ public class ProductStepDefinitions {
         assertThat(prices).containsExactly(price);
 
         List<String> imageUrls = response.jsonPath().getList("imageUrl", String.class);
-        assertThat(imageUrls).containsExactly("https://example.com/image.png");
+        assertThat(imageUrls).containsExactly(imageUrl);
 
         List<Long> categoryIds = response.jsonPath().getList("category.id", Long.class);
         assertThat(categoryIds).containsExactly(context.getCategoryId());

@@ -140,3 +140,6 @@ DOCKER.md의 컨테이너 관리 방식 비교에서, Testcontainers의 단점�
 
 ### 프롬프트 35
 프로파일 활성화 방식을 `systemProperty`에서 `@ActiveProfiles`로 변경하라. Cucumber 테스트는 항상 `e2e` 프로파일을 사용하므로 런타임 유연성이 불필요하다. 코드와 문서 모두 반영한다.
+
+### 프롬프트 36
+시나리오-구현 필드 불일치를 해소하라. `product.feature` 시나리오는 name과 price만 표현하지만, `ProductStepDefinitions.java`는 imageUrl과 categoryId도 전송/검증한다. 시나리오만 읽으면 실제로 어떤 필드가 테스트되는지 알 수 없어 BDD의 "문서로서의 시나리오" 역할이 약화된다. 문서에 이런 불일치를 방지하는 원칙을 추가하고, 시나리오를 구체화한다.

@@ -53,6 +53,9 @@ Feature: 카테고리 관리
 - 비즈니스 용어 사용 (기술 용어 HTTP, JSON, API 금지)
 - 구현이 바뀌어도 Gherkin은 유지되어야 함
 - Background로 공통 전제 조건 추출
+- **시나리오-구현 필드 일치** — Step Definition이 전송하거나 검증하는 모든 핵심 필드는 Gherkin 시나리오 텍스트에 표현되어야 한다. 시나리오에 드러나지 않는 숨겨진 필드가 있으면 시나리오의 의도가 불명확해진다.
+  - 예: 상품 등록 시 name, price, imageUrl, categoryId를 모두 전송한다면, 시나리오 텍스트에도 이 필드들이 표현되어야 한다
+  - Background에서 준비한 컨텍스트(카테고리 등)를 참조할 때는 "해당 카테고리에"처럼 명시적으로 표현한다
 
 ### 3단계: Fixture/TestDataInitializer/DatabaseCleaner 작성 (또는 기존 재사용)
 

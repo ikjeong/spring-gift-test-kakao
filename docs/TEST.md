@@ -132,7 +132,7 @@ PostgreSQL의 `TRUNCATE TABLE ... RESTART IDENTITY CASCADE`를 사용하여 외�
 | 시나리오 | 검증 방법 | 이유 |
 |---|---|---|
 | 카테고리 생성 | HTTP 응답 + 조회 API | 생성 응답의 ID + 목록 조회로 name 일치 검증 |
-| 상품 생성 | HTTP 상태 코드 + 조회 API | ID + name, price 등 핵심 필드 일치 검증 |
+| 상품 생성 | HTTP 상태 코드 + 조회 API | ID + name, price, imageUrl, category.id 핵심 필드 일치 검증 |
 | 존재하지 않는 카테고리 | HTTP 상태 코드 (500) | 예외 발생 여부만 확인 |
 | 선물하기 정상 | HTTP 상태 코드 + **DB 직접 조회** | 옵션 재고 조회 API 없음. JdbcTemplate으로 재고 확인 |
 | 재고 부족 | HTTP 상태 코드 + **DB 직접 조회** | 재고 무변경(롤백)을 DB로 확인 |
@@ -224,9 +224,9 @@ ID 존재 여부만 확인하면 "레코드가 있다"는 것만 증명된다. �
 
 | 방식 | 장점 | 단점 |
 |---|---|---|
-| **현재: `@ScenarioScope`** | 시나리오마다 자동 생성/폐기 | Spring 필요 |
-| PicoContainer | Spring 불필요, 생성자 주입 | 별도 의존성 추가 |
-| ThreadLocal | 주입 없음 | 수동 정리 필요, 누출 위험 |
+| static 필드 | 가장 단순, 프레임워크 불필요 | 병렬 실행 불가(전역 상태 공유), `@Before`에서 수동 초기화 필요 |
+| ThreadLocal | 프레임워크 불필요, 병렬 실행 가능 | `@After`에서 반드시 `remove()` 필요, 누출 시 디버깅 어려움 |
+| **현재: `@ScenarioScope`** | 시나리오마다 자동 생성/폐기, 타입 안전한 주입 | Spring 컨텍스트 필요 |
 
 ### 상태 공유 (구현 방식)
 
