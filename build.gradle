@@ -43,7 +43,6 @@ tasks.register('cucumberTest', Test) {
 	group = 'verification'
 	useJUnitPlatform()
 	include '**/RunCucumberTest.class'
-	systemProperty 'spring.profiles.active', 'e2e'
 	testLogging {
 		events 'passed', 'skipped', 'failed'
 		showStandardStreams = true
